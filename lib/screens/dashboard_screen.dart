@@ -1,6 +1,7 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:order_admin_panel/screens/profile_screen.dart';
 import 'package:order_admin_panel/screens/user_management_screen.dart';
 
 import '../bloc/auth_bloc.dart';
@@ -88,7 +89,6 @@ class _DashboardViewState extends State<DashboardView> {
                     builder: (context, state) {
                       if (state is DataLoading) return Center(child: CircularProgressIndicator(color: AppTheme.accentColor));
                       if (state is DataLoaded) {
-                        // FIX: Changed state.orders to state.filteredOrders
                         return _buildContent(state.filteredOrders, isDesktop);
                       }
                       return Center(child: Text("Welcome. Loading data...", style: AppTheme.subTitleStyle));
@@ -126,10 +126,10 @@ class _DashboardViewState extends State<DashboardView> {
         children: [
           // Only show stats row if permission allows
           if(showStats)
-          Padding(
-            padding: const EdgeInsets.all(20.0),
-            child: _buildStatsRow(orders, isDesktop),
-          ),
+            Padding(
+              padding: const EdgeInsets.all(20.0),
+              child: _buildStatsRow(orders, isDesktop),
+            ),
           Expanded(child: _buildMobileList(orders)),
         ],
       );
@@ -243,6 +243,21 @@ class _DashboardViewState extends State<DashboardView> {
           Text("Admin Panel", style: AppTheme.titleStyle.copyWith(color: Colors.white, fontSize: 20)),
           SizedBox(height: 40),
           _buildMenuLink(Icons.dashboard, "Dashboard", true, () {}),
+
+          // --- CHANGED: Profile Link using _scaffoldKey ---
+          _buildMenuLink(Icons.person, "My Profile", false, () {
+            // Check drawer status using the GlobalKey instead of context
+            if (_scaffoldKey.currentState?.isDrawerOpen ?? false) {
+              Navigator.pop(context);
+            }
+
+            // Navigate to Profile
+            Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ProfileScreen())
+            );
+          }),
+          // ------------------------------------------------
 
           // Manage Users Link (Contains List + Create button)
           if (widget.userRole != 'user')
