@@ -6,6 +6,7 @@ import 'bloc/auth_bloc.dart';
 import 'repositories/auth_repository.dart';
 import 'repositories/data_repository.dart';
 import 'screens/login_screen.dart';
+import 'widgets/session_timeout_listener.dart'; // Import the new widget
 
 void main() {
   runApp(const MyApp());
@@ -16,11 +17,10 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // We use MultiRepositoryProvider to inject BOTH repositories
     return MultiRepositoryProvider(
       providers: [
         RepositoryProvider(create: (context) => AuthRepository()),
-        RepositoryProvider(create: (context) => DataRepository()), // Add this
+        RepositoryProvider(create: (context) => DataRepository()),
       ],
       child: BlocProvider(
         create: (context) => AuthBloc(
@@ -31,7 +31,14 @@ class MyApp extends StatelessWidget {
           scrollBehavior: AppScrollBehavior(),
           debugShowCheckedModeBanner: false,
           theme: ThemeData(primarySwatch: Colors.blue),
-          home: LoginScreen(),
+          // 1. Wrap the app content in the SessionTimeoutListener
+          builder: (context, child) {
+            return SessionTimeoutListener(
+              duration: const Duration(hours: 1), // Set timeout to 1 Hour
+              child: child!,
+            );
+          },
+          home: const LoginScreen(),
         ),
       ),
     );
