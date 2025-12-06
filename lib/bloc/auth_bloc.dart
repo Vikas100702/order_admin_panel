@@ -54,12 +54,16 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         if (response['status'] == 'success') {
           // Save to phone storage so they stay logged in (Optional for now, but good practice)
           final prefs = await SharedPreferences.getInstance();
-          await prefs.setString('user_role', response['role']);
-          await prefs.setString('user_id', response['user_id']);
+
+          String safeUserId = response['user_id'].toString();
+          String safeRole = response['role'].toString();
+
+          await prefs.setString('user_role', safeRole);
+          await prefs.setString('user_id', safeUserId);
 
           emit(AuthAuthenticated(
-              role: response['role'],
-              userId: response['user_id']
+              role: safeRole,
+              userId: safeUserId
           ));
         } else {
           emit(AuthFailure(response['message'] ?? "Login failed"));
