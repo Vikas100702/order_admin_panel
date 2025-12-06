@@ -7,7 +7,7 @@ import '../core/app_theme.dart';
 class CreateUserScreen extends StatefulWidget {
   final String creatorRole; // 'superadmin' or 'admin'
 
-  const CreateUserScreen({Key? key, required this.creatorRole}) : super(key: key);
+  const CreateUserScreen({super.key, required this.creatorRole});
 
   @override
   _CreateUserScreenState createState() => _CreateUserScreenState();
@@ -41,7 +41,7 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
     setState(() => _isLoading = true);
 
     final authState = context.read<AuthBloc>().state;
-    String myEmail = '';
+    String myEmail = 'system';
 
     if(authState is AuthAuthenticated) {
       myEmail = authState.email;
