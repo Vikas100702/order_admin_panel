@@ -53,4 +53,52 @@ class AuthRepository {
     }
   }
 
+  Future<List<dynamic>> getUsers(String requesterRole) async {
+    try {
+      // We pass the role as a query parameter
+      final uri = Uri.parse("${ApiConfig.getUsers}?role=$requesterRole");
+
+      final response = await http.get(uri, headers: ApiConfig.headers);
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['status'] == 'success') {
+          return data['data']; // Returns the list of users
+        } else {
+          throw Exception(data['message']);
+        }
+      } else {
+        throw Exception("Server Error: ${response.statusCode}");
+      }
+    } catch (e) {
+      throw Exception("Failed to load users: $e");
+    }
+  }
+
+  // 2. Delete a User
+  Future<Map<String, dynamic>> deleteUser(String userIdToDelete,
+      String requesterRole) async {
+    try {
+      final response = await http.post(
+        Uri.parse(ApiConfig.deleteUser),
+        headers: ApiConfig.headers,
+        body: jsonEncode({
+          "id": userIdToDelete,
+          "requester_role": requesterRole
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        return {
+          "status": "error",
+          "message": "Server Error: ${response.statusCode}"
+        };
+      }
+    } catch (e) {
+      return {"status": "error", "message": "Connection Failed: $e"};
+    }
+  }
+
 }
