@@ -132,4 +132,91 @@ class AuthRepository {
     }
   }
 
+  // 1. Get Profile Details
+  Future<Map<String, dynamic>> getProfile(String userId) async {
+    try {
+      final response = await http.get(
+        Uri.parse("${ApiConfig.getProfile}?id=$userId"),
+        headers: ApiConfig.headers,
+      );
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        return {"status": "error", "message": "Server Error: ${response.statusCode}"};
+      }
+    } catch (e) {
+      return {"status": "error", "message": "Connection Failed: $e"};
+    }
+  }
+
+  // 2. Update Profile Details
+  Future<Map<String, dynamic>> updateProfile({
+    required String userId,
+    required String fullName,
+    required String email,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse(ApiConfig.updateProfile),
+        headers: ApiConfig.headers,
+        body: jsonEncode({
+          "id": userId,
+          "full_name": fullName,
+          "email": email,
+        }),
+      );
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        return {"status": "error", "message": "Server Error: ${response.statusCode}"};
+      }
+    } catch (e) {
+      return {"status": "error", "message": "Connection Failed: $e"};
+    }
+  }
+
+  // 3. Change Password
+  Future<Map<String, dynamic>> changePassword({
+    required String userId,
+    required String oldPassword,
+    required String newPassword,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse(ApiConfig.changePassword),
+        headers: ApiConfig.headers,
+        body: jsonEncode({
+          "id": userId,
+          "old_password": oldPassword,
+          "new_password": newPassword,
+        }),
+      );
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        return {"status": "error", "message": "Server Error: ${response.statusCode}"};
+      }
+    } catch (e) {
+      return {"status": "error", "message": "Connection Failed: $e"};
+    }
+  }
+
+  // 4. Forgot Password
+  Future<Map<String, dynamic>> forgotPassword(String email) async {
+    try {
+      final response = await http.post(
+        Uri.parse(ApiConfig.forgotPassword),
+        headers: ApiConfig.headers,
+        body: jsonEncode({"email": email}),
+      );
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        return {"status": "error", "message": "Server Error: ${response.statusCode}"};
+      }
+    } catch (e) {
+      return {"status": "error", "message": "Connection Failed: $e"};
+    }
+  }
+
 }
