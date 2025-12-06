@@ -236,7 +236,6 @@ class _DashboardViewState extends State<DashboardView> {
           Text("Admin Panel", style: AppTheme.titleStyle.copyWith(color: Colors.white, fontSize: 20)),
           SizedBox(height: 40),
           _buildMenuLink(Icons.dashboard, "Dashboard", true),
-          _buildMenuLink(Icons.shopping_bag, "Orders", false),
           _buildMenuLink(Icons.people, "Users", false),
           Spacer(),
           Divider(color: Colors.white24),
