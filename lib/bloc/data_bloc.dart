@@ -62,10 +62,15 @@ class DataBloc extends Bloc<DataEvent, DataState> {
       _emitLoadedState(emit, event.criteria);
     });
 
-    // 3. Upload Logic (Existing)
+    // 3. Upload Logic
     on<UploadFileEvent>((event, emit) async {
-      // ... (Keep existing upload logic)
-      // On success, trigger LoadDataEvent(forceRefresh: true)
+      try {
+        await dataRepository.uploadCsv(event.bytes, event.name);
+        emit(UploadSuccess("File uploaded successfully"));
+        add(LoadDataEvent(forceRefresh: true));
+      } catch (e) {
+        emit(DataError(e.toString()));
+      }
     });
   }
 
@@ -84,11 +89,23 @@ class DataBloc extends Bloc<DataEvent, DataState> {
 
     // 2. FILTERING LOGIC
     final filtered = _masterList.where((row) {
-      // A. Text Search (Matches IDs, SKU, Name)
+      // A. Global Search (Matches ANY value in the row)
       if (criteria.searchQuery.isNotEmpty) {
         final q = criteria.searchQuery.toLowerCase();
-        final combinedText = "${row['Order Id']} ${row['Shipment ID']} ${row['SKU']} ${row['Product']} ${row['Buyer name']} ${row['Tracking ID']}".toLowerCase();
-        if (!combinedText.contains(q)) return false;
+        bool matchFound = false;
+
+        // Iterate through all values in the row map
+        if (row is Map) {
+          for (final value in row.values) {
+            // Convert value to string, lowercase it, and check for containment
+            if (value != null && value.toString().toLowerCase().contains(q)) {
+              matchFound = true;
+              break; // Stop checking other fields if match found
+            }
+          }
+        }
+
+        if (!matchFound) return false;
       }
 
       // B. Dropdowns
@@ -129,7 +146,6 @@ class DataBloc extends Bloc<DataEvent, DataState> {
     if (range == null || dateStr == null) return true;
     try {
       // Handle "mm/dd/yy" or standard format
-      // You might need a custom parser depending on your exact Excel format
       final date = DateTime.tryParse(dateStr);
       if (date == null) return true; // Skip if invalid date
       return date.isAfter(range.start.subtract(Duration(days:1))) &&
