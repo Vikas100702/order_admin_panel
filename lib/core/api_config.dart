@@ -10,6 +10,10 @@ class ApiConfig {
   static const String getUsers = "$_baseUrl/get_users.php";
   static const String deleteUser = "$_baseUrl/delete_user.php";
   static const String updateUser = "$_baseUrl/update_user.php";
+  static const String getProfile = "$_baseUrl/get_profile.php";
+  static const String updateProfile = "$_baseUrl/update_profile.php";
+  static const String changePassword = "$_baseUrl/change_password.php";
+  static const String forgotPassword = "$_baseUrl/forgot_password.php";
 
   // 3. Headers (Standard headers for JSON)
   static const Map<String, String> headers = {
