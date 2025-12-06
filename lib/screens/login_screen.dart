@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:order_admin_panel/repositories/auth_repository.dart';
 import '../bloc/auth_bloc.dart';
 import '../core/app_theme.dart';
 import 'dashboard_screen.dart';
@@ -14,6 +15,50 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController emailController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
+
+  void _showForgotPasswordDialog(BuildContext context) {
+    final _resetEmailController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text("Reset Password"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text("Enter your email address to receive a password reset link."),
+            SizedBox(height: 15),
+            TextField(
+              controller: _resetEmailController,
+              decoration: AppTheme.inputDecoration("Email Address", Icons.email),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text("Cancel")),
+          ElevatedButton(
+            style: AppTheme.primaryButtonStyle,
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final email = _resetEmailController.text.trim();
+              if (email.isNotEmpty) {
+                // Call Repository
+                final repo = context.read<AuthRepository>();
+                final response = await repo.forgotPassword(email);
+
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: Text(response['message'] ?? "Request sent"),
+                  backgroundColor: response['status'] == 'success' ? Colors.green : Colors.red,
+                ));
+              }
+            },
+            child: Text("Send Link"),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -88,7 +133,15 @@ class _LoginScreenState extends State<LoginScreen> {
                           decoration: AppTheme.inputDecoration("Password", Icons.lock_outlined),
                           obscureText: true,
                         ),
-                        SizedBox(height: 30),
+                        SizedBox(height: 10),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: TextButton(
+                            onPressed: () => _showForgotPasswordDialog(context),
+                            child: Text("Forgot Password?", style: TextStyle(color: AppTheme.accentColor)),
+                          ),
+                        ),
+                        SizedBox(height: 20),
 
                         BlocBuilder<AuthBloc, AuthState>(
                           builder: (context, state) {
