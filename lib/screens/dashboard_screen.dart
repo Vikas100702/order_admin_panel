@@ -5,6 +5,8 @@ import '../bloc/auth_bloc.dart';
 import '../bloc/data_bloc.dart';
 import '../repositories/data_repository.dart';
 import '../core/app_theme.dart';
+import '../models/filter_model.dart'; // Import Filter Model
+import '../widgets/filter_drawer.dart'; // Import Filter Drawer
 import 'login_screen.dart';
 
 class DashboardScreen extends StatelessWidget {
@@ -33,6 +35,7 @@ class DashboardView extends StatefulWidget {
 
 class _DashboardViewState extends State<DashboardView> {
   final TextEditingController _searchController = TextEditingController();
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>(); // Key for Drawer
   int _rowsPerPage = PaginatedDataTable.defaultRowsPerPage;
 
   @override
@@ -60,7 +63,9 @@ class _DashboardViewState extends State<DashboardView> {
     final isDesktop = MediaQuery.of(context).size.width > 900;
 
     return Scaffold(
+      key: _scaffoldKey, // Assign Key
       backgroundColor: AppTheme.bgColor,
+      endDrawer: FilterDrawer(), // Add the Filter Drawer
       drawer: !isDesktop ? _buildSidebar(context) : null,
       appBar: !isDesktop
           ? AppBar(backgroundColor: AppTheme.primaryColor, title: Text("Dashboard", style: TextStyle(color: Colors.white)))
@@ -82,7 +87,8 @@ class _DashboardViewState extends State<DashboardView> {
                     builder: (context, state) {
                       if (state is DataLoading) return Center(child: CircularProgressIndicator(color: AppTheme.accentColor));
                       if (state is DataLoaded) {
-                        return _buildContent(state.orders, isDesktop);
+                        // FIX: Changed state.orders to state.filteredOrders
+                        return _buildContent(state.filteredOrders, isDesktop);
                       }
                       return Center(child: Text("Welcome. Loading data...", style: AppTheme.subTitleStyle));
                     },
@@ -99,8 +105,6 @@ class _DashboardViewState extends State<DashboardView> {
   Widget _buildContent(List<dynamic> orders, bool isDesktop) {
     if (orders.isEmpty) return Center(child: Text("No Data Found"));
 
-    // PERFORMANCE FIX:
-    // We separate Mobile and Desktop completely to avoid layout conflicts.
     if (isDesktop) {
       return SingleChildScrollView(
         padding: EdgeInsets.all(20),
@@ -113,7 +117,6 @@ class _DashboardViewState extends State<DashboardView> {
         ),
       );
     } else {
-      // Mobile View: Use Column with Expanded List to ensure Lazy Loading works
       return Column(
         children: [
           Padding(
@@ -161,16 +164,14 @@ class _DashboardViewState extends State<DashboardView> {
     );
   }
 
-  // --- DESKTOP TABLE (PAGINATED) ---
+  // --- DESKTOP TABLE ---
   Widget _buildDesktopTable(List<dynamic> data) {
-    // PaginatedDataTable is optimized for performance.
-    // It renders only the rows visible on the current page.
     return Theme(
       data: Theme.of(context).copyWith(cardColor: Colors.white, dividerColor: Colors.grey[200]),
       child: PaginatedDataTable(
         header: Text("Recent Transactions", style: AppTheme.subTitleStyle),
         columns: _getColumns(),
-        source: OrderDataSource(data, context), // The Magic happens here
+        source: OrderDataSource(data, context),
         onRowsPerPageChanged: (r) {
           setState(() {
             _rowsPerPage = r!;
@@ -184,10 +185,8 @@ class _DashboardViewState extends State<DashboardView> {
     );
   }
 
-  // --- MOBILE LIST (LAZY LOADED) ---
+  // --- MOBILE LIST ---
   Widget _buildMobileList(List<dynamic> data) {
-    // ListView.builder is crucial for performance on mobile.
-    // It only builds the widgets that are currently on screen.
     return ListView.builder(
       padding: EdgeInsets.symmetric(horizontal: 20),
       itemCount: data.length,
@@ -282,7 +281,14 @@ class _DashboardViewState extends State<DashboardView> {
               decoration: BoxDecoration(color: AppTheme.bgColor, borderRadius: BorderRadius.circular(8)),
               child: TextField(
                 controller: _searchController,
-                onChanged: (val) => context.read<DataBloc>().add(LoadDataEvent(query: val)),
+                // FIX: Use ApplyFilterEvent instead of LoadDataEvent
+                onChanged: (val) {
+                  final state = context.read<DataBloc>().state;
+                  if (state is DataLoaded) {
+                    final newCriteria = state.activeFilters.copyWith(searchQuery: val);
+                    context.read<DataBloc>().add(ApplyFilterEvent(newCriteria));
+                  }
+                },
                 decoration: InputDecoration(
                   hintText: "Search...",
                   prefixIcon: Icon(Icons.search, color: Colors.grey),
@@ -292,7 +298,14 @@ class _DashboardViewState extends State<DashboardView> {
               ),
             ),
           ),
-          SizedBox(width: 20),
+          SizedBox(width: 10),
+          // FIX: Added Filter Button
+          IconButton(
+            icon: Icon(Icons.filter_list_alt, color: AppTheme.accentColor),
+            tooltip: "Advanced Filters",
+            onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
+          ),
+          SizedBox(width: 10),
           if (widget.userRole != 'user')
             ElevatedButton.icon(
               onPressed: () => _pickAndUploadFile(context),
