@@ -7,6 +7,8 @@ class ApiConfig {
   static const String uploadCsv = "$_baseUrl/upload_file.php";
   static const String getData = "$_baseUrl/get_data.php";
   static const String createUser = "$_baseUrl/create_user.php";
+  static const String getUsers = "$_baseUrl/get_users.php";
+  static const String deleteUser = "$_baseUrl/delete_user.php";
 
   // 3. Headers (Standard headers for JSON)
   static const Map<String, String> headers = {
