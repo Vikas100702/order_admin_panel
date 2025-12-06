@@ -1,11 +1,12 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:file_picker/file_picker.dart';
+import 'package:order_admin_panel/screens/create_user_screen.dart';
+
 import '../bloc/auth_bloc.dart';
 import '../bloc/data_bloc.dart';
-import '../repositories/data_repository.dart';
 import '../core/app_theme.dart';
-import '../models/filter_model.dart'; // Import Filter Model
+import '../repositories/data_repository.dart';
 import '../widgets/filter_drawer.dart'; // Import Filter Drawer
 import 'login_screen.dart';
 
@@ -105,12 +106,16 @@ class _DashboardViewState extends State<DashboardView> {
   Widget _buildContent(List<dynamic> orders, bool isDesktop) {
     if (orders.isEmpty) return Center(child: Text("No Data Found"));
 
+    // Check if we should show stats (Only for Admin/Superadmin)
+    bool showStats = widget.userRole != 'user';
+
     if (isDesktop) {
       return SingleChildScrollView(
         padding: EdgeInsets.all(20),
         child: Column(
           children: [
-            _buildStatsRow(orders, isDesktop),
+            // Only show stats row if permission allows
+            if(showStats) _buildStatsRow(orders, isDesktop),
             SizedBox(height: 20),
             _buildDesktopTable(orders),
           ],
@@ -119,6 +124,8 @@ class _DashboardViewState extends State<DashboardView> {
     } else {
       return Column(
         children: [
+          // Only show stats row if permission allows
+          if(showStats)
           Padding(
             padding: const EdgeInsets.all(20.0),
             child: _buildStatsRow(orders, isDesktop),
@@ -235,8 +242,19 @@ class _DashboardViewState extends State<DashboardView> {
           SizedBox(height: 10),
           Text("Admin Panel", style: AppTheme.titleStyle.copyWith(color: Colors.white, fontSize: 20)),
           SizedBox(height: 40),
-          _buildMenuLink(Icons.dashboard, "Dashboard", true),
-          _buildMenuLink(Icons.people, "Users", false),
+          _buildMenuLink(Icons.dashboard, "Dashboard", true, () {}),
+
+          // Create User Link (HIDDEN for 'user')
+          if (widget.userRole != 'user')
+            _buildMenuLink(Icons.person_add, "Create User", false, () {
+              // Navigate to Create User Screen
+              Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) =>
+                      CreateUserScreen(creatorRole: widget.userRole))
+              );
+            }),
+
           Spacer(),
           Divider(color: Colors.white24),
           ListTile(
@@ -253,13 +271,14 @@ class _DashboardViewState extends State<DashboardView> {
     );
   }
 
-  Widget _buildMenuLink(IconData icon, String title, bool isActive) {
+  Widget _buildMenuLink(IconData icon, String title, bool isActive,
+      VoidCallback onTap) {
     return Container(
       color: isActive ? Colors.white.withOpacity(0.1) : Colors.transparent,
       child: ListTile(
         leading: Icon(icon, color: isActive ? Colors.white : Colors.white54),
         title: Text(title, style: TextStyle(color: isActive ? Colors.white : Colors.white54)),
-        onTap: () {},
+        onTap: onTap,
       ),
     );
   }
