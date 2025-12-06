@@ -1,9 +1,11 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:file_picker/file_picker.dart';
 import '../bloc/auth_bloc.dart';
 import '../bloc/data_bloc.dart';
 import '../repositories/data_repository.dart';
+import '../core/app_theme.dart';
 import 'login_screen.dart';
 
 class DashboardScreen extends StatelessWidget {
@@ -13,11 +15,10 @@ class DashboardScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // We wrap the entire screen in the DataBloc Provider so it can fetch data
     return BlocProvider(
       create: (context) => DataBloc(
         dataRepository: RepositoryProvider.of<DataRepository>(context),
-      )..add(LoadDataEvent()), // Immediately load data when screen opens
+      )..add(LoadDataEvent()),
       child: DashboardView(userRole: userRole),
     );
   }
@@ -32,227 +33,410 @@ class DashboardView extends StatefulWidget {
 }
 
 class _DashboardViewState extends State<DashboardView> {
-
   final ScrollController _verticalController = ScrollController();
   final ScrollController _horizontalController = ScrollController();
-  // To optimize search, you might want to use a "Debouncer" in production,
-  // but for now, we will search as they type.
+  final TextEditingController _searchController = TextEditingController();
 
   void _pickAndUploadFile(BuildContext context) async {
-    // 1. Pick the file
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['csv'],
-      withData: true, // Important for Web: This gives us the bytes
+      withData: true,
     );
 
     if (result != null) {
-      // 2. Get file bytes (Required for Web Uploads)
       List<int> fileBytes = result.files.first.bytes!;
       String fileName = result.files.first.name;
-
-      // 3. Trigger Bloc Event
       context.read<DataBloc>().add(UploadFileEvent(fileBytes, fileName));
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final isDesktop = MediaQuery.of(context).size.width > 900;
+
     return Scaffold(
-      appBar: AppBar(
-        title: Text("Dashboard (${widget.userRole})"),
-        actions: [
-          IconButton(
-            icon: Icon(Icons.logout),
-            onPressed: () {
-              context.read<AuthBloc>().add(LogoutRequested());
-              Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(builder: (_) => LoginScreen())
-              );
-            },
-          )
+      backgroundColor: AppTheme.bgColor,
+      // On Mobile, use Drawer. On Desktop, sidebar is permanent.
+      drawer: !isDesktop ? _buildSidebar(context) : null,
+      appBar: !isDesktop
+          ? AppBar(backgroundColor: AppTheme.primaryColor, title: Text("Dashboard", style: TextStyle(color: Colors.white)))
+          : null,
+      body: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 1. DESKTOP SIDEBAR
+          if (isDesktop) SizedBox(width: 250, child: _buildSidebar(context)),
+
+          // 2. MAIN CONTENT AREA
+          Expanded(
+            child: Column(
+              children: [
+                // Header (Search & Profile)
+                _buildHeader(context, isDesktop),
+
+                // Content (Stats & Table)
+                Expanded(
+                  child: BlocConsumer<DataBloc, DataState>(
+                    listener: (context, state) {
+                      if (state is UploadSuccess) _showSnack(context, state.message, Colors.green);
+                      if (state is DataError) _showSnack(context, state.message, AppTheme.errorColor);
+                    },
+                    builder: (context, state) {
+                      if (state is DataLoading) return Center(child: CircularProgressIndicator(color: AppTheme.accentColor));
+                      if (state is DataLoaded) {
+                        return _buildContent(state.orders, isDesktop);
+                      }
+                      return Center(child: Text("Welcome. Loading data...", style: AppTheme.subTitleStyle));
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
-      body: BlocListener<DataBloc, DataState>(
-        listener: (context, state) {
-          if (state is UploadSuccess) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(state.message), backgroundColor: Colors.green),
-            );
-          } else if (state is DataError) {
-            debugPrint("Error : ${state.message}");
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(state.message), backgroundColor: Colors.red),
-            );
-          }
-        },
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
+    );
+  }
+
+  // --- WIDGET COMPONENTS ---
+
+  Widget _buildSidebar(BuildContext context) {
+    return Container(
+      color: AppTheme.primaryColor,
+      child: Column(
+        children: [
+          SizedBox(height: 40),
+          Icon(Icons.analytics, color: Colors.white, size: 50),
+          SizedBox(height: 10),
+          Text("Admin Panel", style: AppTheme.titleStyle.copyWith(color: Colors.white, fontSize: 20)),
+          SizedBox(height: 40),
+          _buildMenuLink(Icons.dashboard, "Dashboard", true),
+          _buildMenuLink(Icons.shopping_bag, "Orders", false),
+          _buildMenuLink(Icons.people, "Users", false),
+          Spacer(),
+          Divider(color: Colors.white24),
+          ListTile(
+            leading: Icon(Icons.logout, color: Colors.white70),
+            title: Text("Logout", style: TextStyle(color: Colors.white70)),
+            onTap: () {
+              context.read<AuthBloc>().add(LogoutRequested());
+              Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => LoginScreen()));
+            },
+          ),
+          SizedBox(height: 20),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMenuLink(IconData icon, String title, bool isActive) {
+    return Container(
+      color: isActive ? Colors.white.withOpacity(0.1) : Colors.transparent,
+      child: ListTile(
+        leading: Icon(icon, color: isActive ? Colors.white : Colors.white54),
+        title: Text(title, style: TextStyle(color: isActive ? Colors.white : Colors.white54)),
+        onTap: () {}, // Navigation logic here
+      ),
+    );
+  }
+
+  Widget _buildHeader(BuildContext context, bool isDesktop) {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+      color: Colors.white,
+      child: Row(
+        children: [
+          if (isDesktop)
+            Text("Overview", style: AppTheme.titleStyle.copyWith(fontSize: 20)),
+          if (isDesktop) Spacer(),
+
+          // Search Bar
+          Expanded(
+            flex: isDesktop ? 0 : 1,
+            child: Container(
+              width: isDesktop ? 300 : null,
+              height: 45,
+              decoration: BoxDecoration(color: AppTheme.bgColor, borderRadius: BorderRadius.circular(8)),
+              child: TextField(
+                controller: _searchController,
+                onChanged: (val) => context.read<DataBloc>().add(LoadDataEvent(query: val)),
+                decoration: InputDecoration(
+                  hintText: "Search...",
+                  prefixIcon: Icon(Icons.search, color: Colors.grey),
+                  border: InputBorder.none,
+                  contentPadding: EdgeInsets.only(top: 8),
+                ),
+              ),
+            ),
+          ),
+          SizedBox(width: 20),
+
+          // Upload Button (Admin Only)
+          if (widget.userRole != 'user')
+            ElevatedButton.icon(
+              onPressed: () => _pickAndUploadFile(context),
+              icon: Icon(Icons.cloud_upload, size: 18),
+              label: Text(isDesktop ? "Upload CSV" : "Upload"),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.accentColor,
+                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildContent(List<dynamic> orders, bool isDesktop) {
+    return ListView(
+      padding: EdgeInsets.all(20),
+      children: [
+        // 1. STATS CARDS
+        Row(
+          children: [
+            Expanded(child: _buildStatCard("Total Orders", "${orders.length}", Colors.blue)),
+            SizedBox(width: 15),
+            Expanded(child: _buildStatCard("Revenue", "₹${_calculateRevenue(orders)}", Colors.green)),
+            if (isDesktop) SizedBox(width: 15),
+            if (isDesktop) Expanded(child: _buildStatCard("Pending", "12", Colors.orange)),
+          ],
+        ),
+        SizedBox(height: 20),
+
+        // 2. DATA TABLE / LIST
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, 5))],
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // --- TOP ROW: Search & Upload ---
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      decoration: InputDecoration(
-                        hintText: "Search Order ID, Product, City...",
-                        prefixIcon: Icon(Icons.search),
-                        border: OutlineInputBorder(),
-                      ),
-                      onChanged: (value) {
-                        context.read<DataBloc>().add(LoadDataEvent(query: value));
-                      },
-                    ),
-                  ),
-                  SizedBox(width: 10),
-
-                  // Only show Upload button if role is NOT 'user'
-                  if (widget.userRole == 'superadmin' || widget.userRole == 'admin')
-                    ElevatedButton.icon(
-                      onPressed: () => _pickAndUploadFile(context),
-                      icon: Icon(Icons.upload_file),
-                      label: Text("Upload CSV"),
-                      // style: ElevatedButton.styleFrom(height: 50),
-                    ),
-                ],
+              Padding(
+                padding: EdgeInsets.all(20),
+                child: Text("Recent Transactions", style: AppTheme.subTitleStyle),
               ),
-              SizedBox(height: 20),
+              Divider(height: 1),
 
-              // --- DATA TABLE ---
-              Expanded(
-                child: BlocBuilder<DataBloc, DataState>(
-                  builder: (context, state) {
-                    if (state is DataLoading) {
-                      return Center(child: CircularProgressIndicator());
-                    } else if (state is DataLoaded) {
-                      if (state.orders.isEmpty) {
-                        return Center(child: Text("No data found. Upload a CSV!"));
-                      }
-                      return _buildDataTable(state.orders);
-                    }
-                    return Center(child: Text("Welcome. Loading data..."));
-                  },
-                ),
-              ),
+              // RESPONSIVE SWITCHER
+              isDesktop ? _buildDesktopTable(orders) : _buildMobileList(orders),
             ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStatCard(String title, String value, Color color) {
+    return Container(
+      padding: EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border(left: BorderSide(color: color, width: 4)),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: TextStyle(color: Colors.grey, fontSize: 12)),
+          SizedBox(height: 5),
+          Text(value, style: AppTheme.titleStyle.copyWith(fontSize: 22)),
+        ],
+      ),
+    );
+  }
+
+  // --- DESKTOP VIEW: Full Scrollable Table ---
+  Widget _buildDesktopTable(List<dynamic> data) {
+    if (data.isEmpty) return Padding(padding: EdgeInsets.all(40), child: Center(child: Text("No Data Found")));
+
+    return Scrollbar(
+      controller: _verticalController,
+      thumbVisibility: true,
+      child: SingleChildScrollView(
+        controller: _verticalController,
+        scrollDirection: Axis.vertical,
+        child: Scrollbar(
+          controller: _horizontalController,
+          thumbVisibility: true,
+          child: SingleChildScrollView(
+            controller: _horizontalController,
+            scrollDirection: Axis.horizontal,
+            child: DataTable(
+              headingRowColor: MaterialStateProperty.all(Colors.grey[50]),
+              horizontalMargin: 20,
+              columnSpacing: 30,
+              columns: _getColumns(),
+              rows: data.map<DataRow>((row) => _getRow(row)).toList(),
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildDataTable(List<dynamic> data) {
-    // Note: We use SingleChildScrollView for vertical scrolling,
-    // and another for horizontal scrolling, wrapped in Scrollbar widgets.
-    return Scrollbar(
-      // VERTICAL SCROLLBAR
-      controller: _verticalController,
-      thumbVisibility: true,
-      trackVisibility: true,
-      child: SingleChildScrollView(
-        controller: _verticalController,
-        scrollDirection: Axis.vertical,
-        child: Scrollbar(
-          // HORIZONTAL SCROLLBAR
-          controller: _horizontalController,
-          thumbVisibility: true,
-          trackVisibility: true,
-          notificationPredicate: (notif) => notif.depth == 1,
-          child: SingleChildScrollView(
-            controller: _horizontalController,
-            scrollDirection: Axis.horizontal,
-            child: DataTable(
-              headingRowColor: MaterialStateProperty.all(Colors.grey[200]),
-              columns: const [
-                // ------------------ DATA COLUMNS (37 TOTAL) ------------------
-                DataColumn(label: Text('Ordered On')),
-                DataColumn(label: Text('Shipment ID')),
-                DataColumn(label: Text('Order Item ID')),
-                DataColumn(label: Text('Order ID')),
-                DataColumn(label: Text('HSN Code')),
-                DataColumn(label: Text('Order State')),
-                DataColumn(label: Text('Order Type')),
-                DataColumn(label: Text('FSN')),
-                DataColumn(label: Text('SKU')),
-                DataColumn(label: Text('Product')),
-                DataColumn(label: Text('Invoice No')),
-                DataColumn(label: Text('CGST')),
-                DataColumn(label: Text('IGST')),
-                DataColumn(label: Text('SGST')),
-                DataColumn(label: Text('Invoice Date')),
-                DataColumn(label: Text('Invoice Amount')),
-                DataColumn(label: Text('Selling Price')),
-                DataColumn(label: Text('Shipping Charge')),
-                DataColumn(label: Text('Qty')),
-                DataColumn(label: Text('Price inc Subsidy')),
-                DataColumn(label: Text('Buyer Name')),
-                DataColumn(label: Text('Ship To Name')),
-                DataColumn(label: Text('Address 1')),
-                DataColumn(label: Text('Address 2')),
-                DataColumn(label: Text('City')),
-                DataColumn(label: Text('State')),
-                DataColumn(label: Text('Pin Code')),
-                DataColumn(label: Text('Dispatch After')),
-                DataColumn(label: Text('Dispatch By')),
-                DataColumn(label: Text('Form Req')),
-                DataColumn(label: Text('Tracking ID')),
-                DataColumn(label: Text('Pkg Length')),
-                DataColumn(label: Text('Pkg Breadth')),
-                DataColumn(label: Text('Pkg Height')),
-                DataColumn(label: Text('Pkg Weight')),
-                DataColumn(label: Text('Ready to Make')),
-                DataColumn(label: Text('Attachment')),
-              ],
-              rows: data.map<DataRow>((row) {
-                return DataRow(
-                  cells: [
-                    // ------------------ DATA CELLS (37 TOTAL) ------------------
-                    DataCell(Text(row['ordered_on'] ?? '')),
-                    DataCell(Text(row['shipment_id'] ?? '')),
-                    DataCell(Text(row['order_item_id'] ?? '')),
-                    DataCell(Text(row['order_id'] ?? '')),
-                    DataCell(Text(row['hsn_code'] ?? '')),
-                    DataCell(Text(row['order_state'] ?? '')),
-                    DataCell(Text(row['order_type'] ?? '')),
-                    DataCell(Text(row['fsn'] ?? '')),
-                    DataCell(Text(row['sku'] ?? '')),
-                    DataCell(Container(width: 150, child: Text(row['product_name'] ?? '', overflow: TextOverflow.ellipsis))),
-                    DataCell(Text(row['invoice_no'] ?? '')),
-                    DataCell(Text(row['cgst'] ?? '')),
-                    DataCell(Text(row['igst'] ?? '')),
-                    DataCell(Text(row['sgst'] ?? '')),
-                    DataCell(Text(row['invoice_date'] ?? '')),
-                    DataCell(Text(row['invoice_amount'] ?? '')),
-                    DataCell(Text(row['selling_price_per_item'] ?? '')),
-                    DataCell(Text(row['shipping_charges'] ?? '')),
-                    DataCell(Text(row['quantity'] ?? '')),
-                    DataCell(Text(row['price_inc_subsidy'] ?? '')),
-                    DataCell(Text(row['buyer_name'] ?? '')),
-                    DataCell(Text(row['ship_to_name'] ?? '')),
-                    DataCell(Container(width: 200, child: Text(row['address_line_1'] ?? '', overflow: TextOverflow.ellipsis))),
-                    DataCell(Container(width: 200, child: Text(row['address_line_2'] ?? '', overflow: TextOverflow.ellipsis))),
-                    DataCell(Text(row['city'] ?? '')),
-                    DataCell(Text(row['state'] ?? '')),
-                    DataCell(Text(row['pin_code'] ?? '')),
-                    DataCell(Text(row['dispatch_after_date'] ?? '')),
-                    DataCell(Text(row['dispatch_by_date'] ?? '')),
-                    DataCell(Text(row['form_requirement'] ?? '')),
-                    DataCell(Text(row['tracking_id'] ?? '')),
-                    DataCell(Text(row['package_length'] ?? '')),
-                    DataCell(Text(row['package_breadth'] ?? '')),
-                    DataCell(Text(row['package_height'] ?? '')),
-                    DataCell(Text(row['package_weight'] ?? '')),
-                    DataCell(Text(row['ready_to_make'] ?? '')),
-                    DataCell(Text(row['with_attachment'] ?? '')),
-                  ],
-                );
-              }).toList(),
-            ),
+  // --- MOBILE VIEW: Card List ---
+  Widget _buildMobileList(List<dynamic> data) {
+    if (data.isEmpty) return Padding(padding: EdgeInsets.all(20), child: Center(child: Text("No Data")));
+
+    return ListView.separated(
+      shrinkWrap: true,
+      physics: NeverScrollableScrollPhysics(),
+      itemCount: data.length > 20 ? 20 : data.length, // Limit mobile view for performance
+      separatorBuilder: (_, __) => Divider(height: 1),
+      itemBuilder: (context, index) {
+        final row = data[index];
+        return ExpansionTile(
+          leading: CircleAvatar(
+            backgroundColor: AppTheme.bgColor,
+            child: Icon(Icons.shopping_bag_outlined, color: AppTheme.primaryColor, size: 20),
           ),
-        ),
+          title: Text(row['product_name'] ?? 'Unknown Product', overflow: TextOverflow.ellipsis),
+          subtitle: Text("ID: ${row['order_id']} • ₹${row['invoice_amount']}"),
+          trailing: _getStatusChip(row['order_state'] ?? 'Unknown'),
+          children: [
+            Padding(
+              padding: EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  _detailRow("Buyer", row['buyer_name']),
+                  _detailRow("City", row['city']),
+                  _detailRow("Date", row['ordered_on']),
+                  _detailRow("Status", row['order_state']),
+                ],
+              ),
+            )
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _detailRow(String label, String? value) {
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: TextStyle(color: Colors.grey)),
+          Text(value ?? "-", style: TextStyle(fontWeight: FontWeight.bold)),
+        ],
       ),
     );
+  }
+
+  Widget _getStatusChip(String status) {
+    Color color = Colors.orange;
+    if (status.toLowerCase().contains('shipped')) color = Colors.blue;
+    if (status.toLowerCase().contains('delivered')) color = Colors.green;
+    if (status.toLowerCase().contains('cancelled')) color = Colors.red;
+
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+      child: Text(status, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold)),
+    );
+  }
+
+  void _showSnack(BuildContext context, String msg, Color color) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: color));
+  }
+
+  String _calculateRevenue(List<dynamic> orders) {
+    double total = 0;
+    for (var o in orders) {
+      total += double.tryParse(o['invoice_amount']?.toString() ?? '0') ?? 0;
+    }
+    return total.toStringAsFixed(0);
+  }
+
+  // Reuse your column list here, just kept minimal for brevity in this answer
+  List<DataColumn> _getColumns() {
+    return const [
+      // ------------------ DATA COLUMNS (37 TOTAL) ------------------
+      DataColumn(label: Text('Ordered On')),
+      DataColumn(label: Text('Shipment ID')),
+      DataColumn(label: Text('Order Item ID')),
+      DataColumn(label: Text('Order ID')),
+      DataColumn(label: Text('HSN Code')),
+      DataColumn(label: Text('Order State')),
+      DataColumn(label: Text('Order Type')),
+      DataColumn(label: Text('FSN')),
+      DataColumn(label: Text('SKU')),
+      DataColumn(label: Text('Product')),
+      DataColumn(label: Text('Invoice No')),
+      DataColumn(label: Text('CGST')),
+      DataColumn(label: Text('IGST')),
+      DataColumn(label: Text('SGST')),
+      DataColumn(label: Text('Invoice Date')),
+      DataColumn(label: Text('Invoice Amount')),
+      DataColumn(label: Text('Selling Price')),
+      DataColumn(label: Text('Shipping Charge')),
+      DataColumn(label: Text('Qty')),
+      DataColumn(label: Text('Price inc Subsidy')),
+      DataColumn(label: Text('Buyer Name')),
+      DataColumn(label: Text('Ship To Name')),
+      DataColumn(label: Text('Address 1')),
+      DataColumn(label: Text('Address 2')),
+      DataColumn(label: Text('City')),
+      DataColumn(label: Text('State')),
+      DataColumn(label: Text('Pin Code')),
+      DataColumn(label: Text('Dispatch After')),
+      DataColumn(label: Text('Dispatch By')),
+      DataColumn(label: Text('Form Req')),
+      DataColumn(label: Text('Tracking ID')),
+      DataColumn(label: Text('Pkg Length')),
+      DataColumn(label: Text('Pkg Breadth')),
+      DataColumn(label: Text('Pkg Height')),
+      DataColumn(label: Text('Pkg Weight')),
+      DataColumn(label: Text('Ready to Make')),
+      DataColumn(label: Text('Attachment')),
+    ];
+  }
+
+  DataRow _getRow(dynamic row) {
+    return DataRow(cells: [
+      // ------------------ DATA CELLS (37 TOTAL) ------------------
+      DataCell(Text(row['ordered_on'] ?? '')),
+      DataCell(Text(row['shipment_id'] ?? '')),
+      DataCell(Text(row['order_item_id'] ?? '')),
+      DataCell(Text(row['order_id'] ?? '')),
+      DataCell(Text(row['hsn_code'] ?? '')),
+      DataCell(Text(row['order_state'] ?? '')),
+      DataCell(Text(row['order_type'] ?? '')),
+      DataCell(Text(row['fsn'] ?? '')),
+      DataCell(Text(row['sku'] ?? '')),
+      DataCell(Container(width: 150, child: Text(row['product_name'] ?? '', overflow: TextOverflow.ellipsis))),
+      DataCell(Text(row['invoice_no'] ?? '')),
+      DataCell(Text(row['cgst'] ?? '')),
+      DataCell(Text(row['igst'] ?? '')),
+      DataCell(Text(row['sgst'] ?? '')),
+      DataCell(Text(row['invoice_date'] ?? '')),
+      DataCell(Text(row['invoice_amount'] ?? '')),
+      DataCell(Text(row['selling_price_per_item'] ?? '')),
+      DataCell(Text(row['shipping_charges'] ?? '')),
+      DataCell(Text(row['quantity'] ?? '')),
+      DataCell(Text(row['price_inc_subsidy'] ?? '')),
+      DataCell(Text(row['buyer_name'] ?? '')),
+      DataCell(Text(row['ship_to_name'] ?? '')),
+      DataCell(Container(width: 200, child: Text(row['address_line_1'] ?? '', overflow: TextOverflow.ellipsis))),
+      DataCell(Container(width: 200, child: Text(row['address_line_2'] ?? '', overflow: TextOverflow.ellipsis))),
+      DataCell(Text(row['city'] ?? '')),
+      DataCell(Text(row['state'] ?? '')),
+      DataCell(Text(row['pin_code'] ?? '')),
+      DataCell(Text(row['dispatch_after_date'] ?? '')),
+      DataCell(Text(row['dispatch_by_date'] ?? '')),
+      DataCell(Text(row['form_requirement'] ?? '')),
+      DataCell(Text(row['tracking_id'] ?? '')),
+      DataCell(Text(row['package_length'] ?? '')),
+      DataCell(Text(row['package_breadth'] ?? '')),
+      DataCell(Text(row['package_height'] ?? '')),
+      DataCell(Text(row['package_weight'] ?? '')),
+      DataCell(Text(row['ready_to_make'] ?? '')),
+      DataCell(Text(row['with_attachment'] ?? '')),
+    ],);
   }
 }
