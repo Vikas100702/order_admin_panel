@@ -24,6 +24,7 @@ class AuthRepository {
   }
 
   Future<Map<String, dynamic>> createUser({
+    required String fullName,
     required String email,
     required String password,
     required String role,
@@ -35,6 +36,7 @@ class AuthRepository {
         Uri.parse(ApiConfig.createUser),
         headers: ApiConfig.headers,
         body: jsonEncode({
+          "full_name": fullName,
           "email": email,
           "password": password,
           "role": role,
@@ -53,10 +55,39 @@ class AuthRepository {
     }
   }
 
+  Future<Map<String, dynamic>> updateUser({
+    required String userId,
+    required String fullName,
+    required String role,
+    required String requesterRole,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse(ApiConfig.updateUser),
+        headers: ApiConfig.headers,
+        body: jsonEncode({
+          "id": userId,
+          "full_name": fullName, // Matches your DB column
+          "role": role,
+          "requester_role": requesterRole
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        return {"status": "error", "message": "Server Error: ${response.statusCode}"};
+      }
+    } catch (e) {
+      return {"status": "error", "message": "Connection Failed: $e"};
+    }
+  }
+
   Future<List<dynamic>> getUsers(String requesterRole) async {
     try {
+      final String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
       // We pass the role as a query parameter
-      final uri = Uri.parse("${ApiConfig.getUsers}?role=$requesterRole");
+      final uri = Uri.parse("${ApiConfig.getUsers}?role=$requesterRole&time=$timestamp");
 
       final response = await http.get(uri, headers: ApiConfig.headers);
 
