@@ -1,7 +1,7 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:order_admin_panel/screens/create_user_screen.dart';
+import 'package:order_admin_panel/screens/user_management_screen.dart';
 
 import '../bloc/auth_bloc.dart';
 import '../bloc/data_bloc.dart';
@@ -244,14 +244,13 @@ class _DashboardViewState extends State<DashboardView> {
           SizedBox(height: 40),
           _buildMenuLink(Icons.dashboard, "Dashboard", true, () {}),
 
-          // Create User Link (HIDDEN for 'user')
+          // Manage Users Link (Contains List + Create button)
           if (widget.userRole != 'user')
-            _buildMenuLink(Icons.person_add, "Create User", false, () {
-              // Navigate to Create User Screen
+            _buildMenuLink(Icons.people, "Manage Users", false, () {
               Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) =>
-                      CreateUserScreen(creatorRole: widget.userRole))
+                      UserManagementScreen(currentUserRole: widget.userRole))
               );
             }),
 
